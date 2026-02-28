@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from app.models import db, StudyPlan
+from ..models import db, StudyPlan
 from app.routes.auth import token_required
 from app.services.ai_service import generate_study_plan
 
