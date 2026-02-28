@@ -1,7 +1,12 @@
 import axios from "axios"
 
+const baseURL =
+  import.meta.env.MODE === "development"
+    ? "http://127.0.0.1:8000/api"
+    : "https://ai-smart-study-planner.onrender.com/api"
+
 const API = axios.create({
-  baseURL: "http://127.0.0.1:8000/api",
+  baseURL,
 })
 
 API.interceptors.request.use((config) => {
@@ -13,4 +18,3 @@ API.interceptors.request.use((config) => {
 })
 
 export default API
-
