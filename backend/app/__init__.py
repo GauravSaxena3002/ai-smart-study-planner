@@ -8,7 +8,7 @@ import os
 
 
 def create_app():
-    app = Flask(__name__, static_folder="../frontend/dist", static_url_path="")
+    app = Flask(__name__, static_folder="../../frontend/dist", static_url_path="")
     app.config.from_object(Config)
 
     db.init_app(app)
