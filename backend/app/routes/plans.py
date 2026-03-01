@@ -2,6 +2,8 @@ from flask import Blueprint, request, jsonify
 from ..models import db, StudyPlan
 from .auth import token_required
 from ..services.ai_service import generate_study_plan
+from sqlalchemy.orm.attributes import flag_modified
+import traceback
 
 plans_bp = Blueprint("plans", __name__)
 
@@ -10,14 +12,26 @@ plans_bp = Blueprint("plans", __name__)
 @token_required
 def generate(current_user_id):
     try:
-        data = request.json
+        data = request.get_json()
 
-        subject = data["subject"]
-        level = data["level"]
-        days = int(data["days"])
-        hours = float(data["hours"])
+        if not data:
+            return jsonify({"error": "No input data provided"}), 400
+
+        subject = data.get("subject")
+        level = data.get("level")
+        days = data.get("days")
+        hours = data.get("hours")
+
+        if not all([subject, level, days, hours]):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        days = int(days)
+        hours = float(hours)
 
         plan_data = generate_study_plan(subject, level, days, hours)
+
+        if not plan_data:
+            return jsonify({"error": "AI failed to generate plan"}), 500
 
         plan = StudyPlan(
             subject=subject,
@@ -38,76 +52,94 @@ def generate(current_user_id):
         })
 
     except Exception as e:
+        print("=== ERROR IN GENERATE PLAN ===")
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
 
 @plans_bp.route("/", methods=["GET"])
 @token_required
 def get_all_plans(current_user_id):
-    plans = StudyPlan.query.filter_by(user_id=current_user_id).all()
+    try:
+        plans = StudyPlan.query.filter_by(user_id=current_user_id).all()
 
-    return jsonify([
-        {
-            "id": p.id,
-            "subject": p.subject,
-            "level": p.level,
-            "days": p.days,
-            "completion_percentage": p.completion_percentage,
-            "plan_data": p.plan_data,
-            "created_at": p.created_at.isoformat(),
-        }
-        for p in plans
-    ])
+        return jsonify([
+            {
+                "id": p.id,
+                "subject": p.subject,
+                "level": p.level,
+                "days": p.days,
+                "completion_percentage": p.completion_percentage,
+                "plan_data": p.plan_data,
+                "created_at": p.created_at.isoformat(),
+            }
+            for p in plans
+        ])
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
 
 @plans_bp.route("/<int:plan_id>/toggle", methods=["POST"])
 @token_required
 def toggle_topic(current_user_id, plan_id):
-    data = request.json
-    day_index = data["day_index"]
-    topic_index = data["topic_index"]
+    try:
+        data = request.get_json()
+        day_index = data.get("day_index")
+        topic_index = data.get("topic_index")
 
-    plan = StudyPlan.query.filter_by(
-        id=plan_id, user_id=current_user_id
-    ).first()
+        plan = StudyPlan.query.filter_by(
+            id=plan_id, user_id=current_user_id
+        ).first()
 
-    if not plan:
-        return jsonify({"error": "Plan not found"}), 404
+        if not plan:
+            return jsonify({"error": "Plan not found"}), 404
 
-    plan.plan_data[day_index]["topics"][topic_index]["completed"] = \
-        not plan.plan_data[day_index]["topics"][topic_index]["completed"]
+        plan.plan_data[day_index]["topics"][topic_index]["completed"] = \
+            not plan.plan_data[day_index]["topics"][topic_index]["completed"]
 
-    # Recalculate completion
-    total = 0
-    completed = 0
+        total = 0
+        completed = 0
 
-    for day in plan.plan_data:
-        for topic in day["topics"]:
-            total += 1
-            if topic["completed"]:
-                completed += 1
+        for day in plan.plan_data:
+            for topic in day["topics"]:
+                total += 1
+                if topic["completed"]:
+                    completed += 1
 
-    plan.completion_percentage = (completed / total) * 100 if total > 0 else 0
+        plan.completion_percentage = (completed / total) * 100 if total > 0 else 0
 
-    from sqlalchemy.orm.attributes import flag_modified
-    flag_modified(plan, "plan_data")
+        flag_modified(plan, "plan_data")
+        db.session.commit()
 
-    db.session.commit()
+        return jsonify({
+            "completion_percentage": plan.completion_percentage,
+            "plan_data": plan.plan_data
+        })
 
-    return jsonify({
-        "completion_percentage": plan.completion_percentage,
-        "plan_data": plan.plan_data
-    })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
 @plans_bp.route("/<int:plan_id>", methods=["DELETE"])
 @token_required
 def delete_plan(current_user_id, plan_id):
-    plan = StudyPlan.query.filter_by(
-        id=plan_id,
-        user_id=current_user_id
-    ).first()
+    try:
+        plan = StudyPlan.query.filter_by(
+            id=plan_id,
+            user_id=current_user_id
+        ).first()
 
-    if not plan:
-        return jsonify({"error": "Plan not found"}), 404
+        if not plan:
+            return jsonify({"error": "Plan not found"}), 404
 
-    db.session.delete(plan)
-    db.session.commit()
+        db.session.delete(plan)
+        db.session.commit()
 
-    return jsonify({"message": "Plan deleted"})
+        return jsonify({"message": "Plan deleted"})
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
