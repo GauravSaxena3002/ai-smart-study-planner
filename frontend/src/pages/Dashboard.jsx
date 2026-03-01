@@ -7,8 +7,8 @@ function Dashboard() {
 
   const [subject, setSubject] = useState("")
   const [level, setLevel] = useState("Beginner")
-  const [days, setDays] = useState(7)
-  const [hours, setHours] = useState(2)
+  const [days, setDays] = useState("")
+  const [hours, setHours] = useState("")
 
   const [plans, setPlans] = useState([])
   const [expandedPlan, setExpandedPlan] = useState(null)
@@ -40,6 +40,10 @@ function Dashboard() {
 
   const generatePlan = async (e) => {
     e.preventDefault()
+    if (!subject || days < 1 || hours < 1) {
+      setError("Please enter valid values")
+      return
+    }
     setLoading(true)
     setError("")
 
@@ -53,6 +57,9 @@ function Dashboard() {
 
       await fetchPlans()
       setSubject("")
+      setLevel("Beginner")
+      setDays("")
+      setHours("")
     } catch {
       setError("Failed to generate plan")
     } finally {
@@ -187,6 +194,9 @@ function Dashboard() {
 
             <input
               type="number"
+              placeholder="Days"
+              min="1"
+              max="365"
               className="p-3 rounded bg-slate-800"
               value={days}
               onChange={(e) => setDays(e.target.value)}
@@ -195,6 +205,10 @@ function Dashboard() {
 
             <input
               type="number"
+              placeholder="Hours per day"
+              min="1"
+              max="24"
+              step="0.5"
               className="p-3 rounded bg-slate-800"
               value={hours}
               onChange={(e) => setHours(e.target.value)}
